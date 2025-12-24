@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  supabase-db:
+    image: supabase/postgres:15
+    container_name: supabase_db
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./init_supabase.sql:/docker-entrypoint-initdb.d/init.sql
+      - supabase_db_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  supabase-auth:
+    image: supabase/gotrue:v2.75
+    container_name: supabase_auth
+    depends_on:
+      - supabase-db
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: 9999
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://postgres:postgres@supabase-db:5432/postgres
+      GOTRUE_SITE_URL: http://localhost:3000
+      GOTRUE_JWT_SECRET: super-secret-jwt-token-with-at-least-32-characters-long
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
+    ports:
+      - "9999:9999"
+    restart: unless-stopped
+
+  supabase-rest:
+    image: postgrest/postgrest:latest
+    container_name: supabase_rest
+    depends_on:
+      - supabase-db
+    environment:
+      PGRST_DB_URI: postgres://postgres:postgres@supabase-db:5432/postgres
+      PGRST_OPENAPI_SERVER_PROXY_URI: http://supabase-db:5432/postgres
+      PGRST_DB_SCHEMA: public
+      PGRST_DB_ANON_ROLE: anon
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+
+  supabase-storage:
+    image: supabase/storage-api:latest
+    container_name: supabase_storage
+    depends_on:
+      - supabase-db
+    environment:
+      POSTGRES_URL: postgres://postgres:postgres@supabase-db:5432/postgres
+      PGOPTIONS: -c search_path=storage
+    ports:
+      - "5000:5000"
+    restart: unless-stopped
+
+volumes:
+  supabase_db_data:
